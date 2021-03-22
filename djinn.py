@@ -27,6 +27,7 @@ class Djinn(discord.Client):
         super().__init__(loop=loop, **options)
         self.movie_db = movie_db
         self.vote_emoji = b'\xf0\x9f\x91\x8d'.decode('utf-8')
+        self.star_emoji = b'\xe2\xad\x90'.decode('utf-8')
         self.channels_with_polls = set()
 
     async def on_ready(self) -> None:
@@ -37,14 +38,19 @@ class Djinn(discord.Client):
         embed = discord.Embed(
             title=f'{movie.original_title} ({movie.year})',
             description=movie.url,
-            color=0xff00ff)
+            color=0xe2b616)
         if poster_url not in (None, 'n/a', 'N/A'):
             embed.set_image(url=poster_url)
+
+        embed.add_field(name='Rating', value=f'{movie.rating}/10')
+        embed.add_field(name='Votes', value=f'{movie.votes}')
+        embed.add_field(name='Duration', value=f'{movie.runtime} minutes')
+        embed.add_field(name='Genres', value=f'{movie.genres.replace(",", ", ")}')
         return embed
 
     def random_movie_embeds(self, amount: int = 3) -> List[discord.Embed]:
         movie_embeds: List[discord.Embed] = list()
-        for movie in self.movie_db.random_movies(ratings=1000, number=amount):
+        for movie in self.movie_db.random_movies(ratings=1000, minimum_rating=0, number=amount):
             embed = self.format_movie_embed(movie)
             movie_embeds.append(embed)
         return movie_embeds

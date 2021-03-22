@@ -18,7 +18,7 @@ class Movie():
     is_adult: int
     year: int
     runtime: int
-    generes: str
+    genres: str
     rating: float
     votes: int
 
@@ -117,10 +117,8 @@ class IMDB():
                 table.insert()
             table.cleanup()
 
-    def random_movies(self, ratings: int = 1000, number: int = 3) -> List:
-        # self.cursor.execute('SELECT * FROM movies NATURAL JOIN ratings WHERE votes > ? ORDER BY RANDOM() limit ?', (ratings, number))
-        # print(tuple(map(lambda movie: Movie(*movie).post_url(), self.cursor.fetchall())))
-        for movie_data in self.connection.execute('SELECT * FROM movies NATURAL JOIN ratings WHERE votes > ? ORDER BY RANDOM() limit ?', (ratings, number)):
+    def random_movies(self, ratings: int = 0, minimum_rating: float = 0, number: int = 3) -> List:
+        for movie_data in self.connection.execute('SELECT * FROM movies NATURAL JOIN ratings WHERE votes >= ? AND rating >= ? ORDER BY RANDOM() limit ?', (ratings, minimum_rating, number)):
             yield Movie(*movie_data)
 
 
