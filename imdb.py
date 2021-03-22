@@ -22,9 +22,12 @@ class Movie():
     rating: float
     votes: int
 
-    def post_url(self) -> Optional[str]:
-        movie_url = f'https://www.imdb.com/title/{self.tconst}/'
-        response = requests.get(movie_url)
+    @property
+    def url(self) -> str:
+        return f'https://www.imdb.com/title/{self.tconst}/'
+
+    def poster_url(self) -> Optional[str]:
+        response = requests.get(self.url)
         poster_url_pattern = r'^\s*"image":\s*"(https:\/\/.+\.jpg)",$'
         html_content = response.content.decode('utf-8')
         match = re.search(poster_url_pattern, html_content, flags=re.MULTILINE)
@@ -115,10 +118,13 @@ class IMDB():
             table.cleanup()
 
     def random_movies(self, ratings: int = 1000, number: int = 3) -> List:
-        self.cursor.execute('SELECT * FROM movies NATURAL JOIN ratings WHERE votes > ? ORDER BY RANDOM() limit ?', (ratings, number))
-        print(tuple(map(lambda movie: Movie(*movie).post_url(), self.cursor.fetchall())))
+        # self.cursor.execute('SELECT * FROM movies NATURAL JOIN ratings WHERE votes > ? ORDER BY RANDOM() limit ?', (ratings, number))
+        # print(tuple(map(lambda movie: Movie(*movie).post_url(), self.cursor.fetchall())))
+        for movie_data in self.connection.execute('SELECT * FROM movies NATURAL JOIN ratings WHERE votes > ? ORDER BY RANDOM() limit ?', (ratings, number)):
+            yield Movie(*movie_data)
+
 
 if __name__ == '__main__':
     imdb = IMDB()
-    imdb.update()
+    # imdb.update()
     imdb.random_movies()

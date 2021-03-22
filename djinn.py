@@ -6,6 +6,7 @@ import asyncio
 import discord
 import requests
 
+from imdb import (IMDB, Movie)
 from collections import defaultdict
 from typing import (Dict, List, Union, Any, Optional)
 
@@ -15,38 +16,10 @@ def load(path: str) -> str:
         return f.read().strip()
 
 
-class MovieDB():
-    def __init__(
-        self,
-        url: str,
-        imdb_ids_path: str = 'resources/imdb_movie_ids',
-        **default_parameters: str,
-    ) -> None:
-        self.url = url
-        self.default_parameters = default_parameters
-        self.imdb_ids = self._load_imdb_ids(imdb_ids_path)
-
-    def _load_imdb_ids(self, path: str) -> List[str]:
-        with open(path, 'r') as f:
-            return f.read().split()
-
-    def request(self, **parameters) -> Dict:
-        parameters.update(self.default_parameters)
-        response = requests.get(self.url, params=parameters)
-        return response.json()
-
-    def get_random_movie(self) -> Dict:
-        movie: Dict = None
-        while not movie or movie.get('Response') == 'False':
-            imdb_id = random.choice(self.imdb_ids)
-            movie = self.request(i=imdb_id)
-        return movie
-
-
 class Djinn(discord.Client):
     def __init__(
         self,
-        movie_db: MovieDB,
+        movie_db: IMDB,
         *,
         loop: Optional[asyncio.AbstractEventLoop] = None,
         **options: Any,
@@ -59,14 +32,11 @@ class Djinn(discord.Client):
     async def on_ready(self) -> None:
         print(f'{self.user} is ready to start working!')
 
-    def format_movie_embed(self, movie_metadata: Dict) -> discord.Embed:
-        title = movie_metadata.get('Title')
-        year = movie_metadata.get('Year')
-        imdb_id = movie_metadata.get('imdbID')
-        poster_url = movie_metadata.get('Poster')
+    def format_movie_embed(self, movie: Movie) -> discord.Embed:
+        poster_url = movie.poster_url()
         embed = discord.Embed(
-            title=f'{title} ({year})',
-            description=f'https://www.imdb.com/title/{imdb_id}',
+            title=f'{movie.original_title} ({movie.year})',
+            description=movie.url,
             color=0xff00ff)
         if poster_url not in (None, 'n/a', 'N/A'):
             embed.set_image(url=poster_url)
@@ -74,9 +44,8 @@ class Djinn(discord.Client):
 
     def random_movie_embeds(self, amount: int = 3) -> List[discord.Embed]:
         movie_embeds: List[discord.Embed] = list()
-        for index in range(amount):
-            movie_metadata = self.movie_db.get_random_movie()
-            embed = self.format_movie_embed(movie_metadata)
+        for movie in self.movie_db.random_movies(ratings=1000, number=amount):
+            embed = self.format_movie_embed(movie)
             movie_embeds.append(embed)
         return movie_embeds
 
@@ -134,10 +103,7 @@ class Djinn(discord.Client):
 
 if __name__ == '__main__':
     DISCORD_TOKEN = load('keys/discord_token')
-    OMDB_API_KEY = load('keys/omdb_api_key')
-    movie_db = MovieDB('https://www.omdbapi.com/',
-                       imdb_ids_path='resources/1000_movies',
-                       apikey=OMDB_API_KEY)
+    movie_db = IMDB()
 
     djinn = Djinn(movie_db)
     djinn.run(DISCORD_TOKEN)
