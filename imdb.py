@@ -10,6 +10,7 @@ from abc import (ABC, abstractmethod)
 from typing import (List, Optional)
 from dataclasses import dataclass
 
+
 @dataclass
 class Movie():
     tconst: str
@@ -33,6 +34,7 @@ class Movie():
         match = re.search(poster_url_pattern, html_content, flags=re.MULTILINE)
         return match.group(1) if match else match
 
+
 @dataclass
 class Table(ABC):
     cursor: sqlite3.Cursor
@@ -43,7 +45,7 @@ class Table(ABC):
 
     def download(self) -> Optional[bool]:
         response = requests.get(self.dataset_url)
-        with requests.get(self.dataset_url, stream = True) as response_stream:
+        with requests.get(self.dataset_url, stream=True) as response_stream:
             with open(f'{self.name}.tsv.gz', 'wb') as file:
                 for chunk in response_stream.iter_content(chunk_size=8192):
                     file.write(chunk)
@@ -53,7 +55,7 @@ class Table(ABC):
         with gzip.open(f'{self.name}.tsv.gz', 'r') as file:
             skip = True
             for line in file:
-                if skip: # skip header
+                if skip:  # skip header
                     skip = False
                     continue
                 yield line.decode('utf-8').strip().split('\t')
@@ -74,38 +76,48 @@ class Table(ABC):
     def insert(self) -> None:
         pass
 
+
 class MoviesTable(Table):
     def insert(self) -> None:
         is_movie = lambda title: title[1] == 'movie'
         for title in filter(is_movie, self.load_data_from_file()):
-            self.cursor.execute('INSERT INTO movies VALUES (?, ?, ?, ?, ?, ?, ?)', (title[0], title[2], title[3], title[4], title[5], title[7], title[8]))
+            self.cursor.execute(
+                'INSERT INTO movies VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (title[0], title[2], title[3], title[4], title[5], title[7],
+                 title[8]))
         self.connection.commit()
+
 
 class RatingsTable(Table):
     def insert(self) -> None:
         for title in self.load_data_from_file():
-            self.cursor.execute('INSERT INTO ratings VALUES (?, ?, ?)', (title[0], title[1], title[2]))
+            self.cursor.execute('INSERT INTO ratings VALUES (?, ?, ?)',
+                                (title[0], title[1], title[2]))
         self.connection.commit()
 
-class IMDB():
 
-    def __init__(self, filename: str = 'resources/movies.db',) -> None:
+class IMDB():
+    def __init__(
+        self,
+        filename: str = 'resources/movies.db',
+    ) -> None:
         self.connection = sqlite3.connect(filename)
         self.cursor = self.connection.cursor()
         self.tables = (
             MoviesTable(
-                cursor = self.cursor,
-                connection = self.connection,
-                name = 'movies',
-                dataset_url = 'https://datasets.imdbws.com/title.basics.tsv.gz',
-                schema = '(tconst TEXT, primary_title TEXT, original_title TEXT, is_adult INTEGER, year INTEGER, runtime INTEGER, genres TEXT)',
+                cursor=self.cursor,
+                connection=self.connection,
+                name='movies',
+                dataset_url='https://datasets.imdbws.com/title.basics.tsv.gz',
+                schema=
+                '(tconst TEXT, primary_title TEXT, original_title TEXT, is_adult INTEGER, year INTEGER, runtime INTEGER, genres TEXT)',
             ),
             RatingsTable(
-                cursor = self.cursor,
-                connection = self.connection,
-                name = 'ratings',
-                dataset_url = 'https://datasets.imdbws.com/title.ratings.tsv.gz',
-                schema = '(tconst TEXT, rating REAL, votes INTEGER)',
+                cursor=self.cursor,
+                connection=self.connection,
+                name='ratings',
+                dataset_url='https://datasets.imdbws.com/title.ratings.tsv.gz',
+                schema='(tconst TEXT, rating REAL, votes INTEGER)',
             ),
         )
 
@@ -117,8 +129,13 @@ class IMDB():
                 table.insert()
             table.cleanup()
 
-    def random_movies(self, ratings: int = 0, minimum_rating: float = 0, number: int = 3) -> List:
-        for movie_data in self.connection.execute('SELECT * FROM movies NATURAL JOIN ratings WHERE votes >= ? AND rating >= ? ORDER BY RANDOM() limit ?', (ratings, minimum_rating, number)):
+    def random_movies(self,
+                      ratings: int = 0,
+                      minimum_rating: float = 0,
+                      number: int = 3) -> List:
+        for movie_data in self.connection.execute(
+                'SELECT * FROM movies NATURAL JOIN ratings WHERE votes >= ? AND rating >= ? ORDER BY RANDOM() limit ?',
+            (ratings, minimum_rating, number)):
             yield Movie(*movie_data)
 
 
