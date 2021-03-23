@@ -140,7 +140,7 @@ class Djinn(discord.Client):
     async def get_movies(self,
                         channel: discord.abc.Messageable, 
                         options: Dict = {},
-                        reaction: str = None):
+                        reaction: str = None) -> List[discord.message.Message]:
         movie_embeds: List[discord.Embed] = self.random_movie_embeds(**options)
 
         messages: List[discord.message.Message] = list()
