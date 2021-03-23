@@ -123,7 +123,7 @@ class Djinn(discord.Client):
         self.channels_with_polls.add(channel)
         await channel.send('Wait while I search my boundless library')
 
-        await self.publish_movies(channel=channel, options=options, self.vote_emoji)
+        await messages = self.publish_movies(channel=channel, options=options, self.vote_emoji)
         
         await channel.send('I will wait 10 minutes before counting the votes.')
         await asyncio.sleep(600)
@@ -149,6 +149,7 @@ class Djinn(discord.Client):
             if reaction is not None:
                 await message.add_reaction(reaction)
             messages.append(message)
+        return messages
         
 
     async def on_message(self, message: discord.message.Message) -> None:
@@ -160,7 +161,7 @@ class Djinn(discord.Client):
             if message.channel in self.channels_with_polls:
                 await message.channel.send('Stop spamming!')
             if request.operation[0] == 'fetch':
-                await self.publish_movies(channel=message.channel, options=request.query())
+                await self.publish_movies   (channel=message.channel, options=request.query())
             elif request.operation[0] == 'poll':
                 await self.poll(message.channel, options=request.query())
 
