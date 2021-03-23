@@ -9,7 +9,7 @@ import requests
 
 from imdb import (IMDB, Movie)
 from collections import defaultdict
-from typing import (Dict, List, Union, Any, Optional, Tuple)
+from typing import (Dict, List, Union, Any, Optional, Tuple, Union, Callable)
 
 
 def load(path: str) -> str:
@@ -19,16 +19,21 @@ def load(path: str) -> str:
 
 class Request():
     operation: Tuple[str, int] = None
-    rating: Tuple[str, int] = None
+    rating: Tuple[str, float] = None
     votes: Tuple[str, int] = None
     duration: Tuple[str, int] = None
     genre: str = None
 
     @staticmethod
-    def parse_parameter(parameter_name, message) -> Tuple[str, int]:
-        match = re.search(f'\(.*{parameter_name} *([=<>]) *(\d+).*\)', message)
+    def parse_parameter(
+        parameter_name: str,
+        message: str,
+        amount_type: Callable = int,
+    ) -> Tuple[str, Union[int, float]]:
+        match = re.search(f'\(.*{parameter_name} *([=<>]) *(\d+(.\d+)?).*\)',
+                          message)
         if match:
-            return (match.group(1), int(match.group(2)))
+            return (match.group(1), amount_type(match.group(2)))
         return match
 
     def __init__(self, message: str) -> None:
@@ -38,7 +43,7 @@ class Request():
         self.operation = (operation_match.group(1),
                           int(operation_match.group(2)))
 
-        self.rating = Request.parse_parameter('rating', message)
+        self.rating = Request.parse_parameter('rating', message, float)
         self.votes = Request.parse_parameter('votes', message)
         self.duration = Request.parse_parameter('duration', message)
 
@@ -56,6 +61,8 @@ class Request():
             arguments['votes'] = self.votes
         if self.duration:
             arguments['duration'] = self.duration
+        if self.genre:
+            arguments['genre'] = self.genre
         return arguments
 
 
