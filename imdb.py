@@ -128,7 +128,6 @@ class IMDB():
                 table.insert()
             table.cleanup()
 
-    # def random_movies(self, ratings: int = 0, minimum_rating: float = 0, number: int = 3) -> List:
     def random_movies(
             self,
             amount: int = 3,
