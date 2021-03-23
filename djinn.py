@@ -137,7 +137,7 @@ class Djinn(discord.Client):
         await result.reply('You shall watch this movie.')
         self.channels_with_polls.remove(channel)
 
-    async def get_movies(self,
+    async def publish_movies(self,
                         channel: discord.abc.Messageable, 
                         options: Dict = {},
                         reaction: str = None) -> List[discord.message.Message]:
