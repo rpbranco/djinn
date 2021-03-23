@@ -123,7 +123,7 @@ class Djinn(discord.Client):
         self.channels_with_polls.add(channel)
         await channel.send('Wait while I search my boundless library')
 
-        await self.get_movies(options, self.vote_emoji)
+        await self.get_movies(channel=channel, options=options, self.vote_emoji)
         
         await channel.send('I will wait 10 minutes before counting the votes.')
         await asyncio.sleep(600)
@@ -137,7 +137,10 @@ class Djinn(discord.Client):
         await result.reply('You shall watch this movie.')
         self.channels_with_polls.remove(channel)
 
-    async def get_movies(self, options: Dict = {}, reaction: str = None):
+    async def get_movies(self,
+                        channel: discord.abc.Messageable, 
+                        options: Dict = {},
+                        reaction: str = None):
         movie_embeds: List[discord.Embed] = self.random_movie_embeds(**options)
 
         messages: List[discord.message.Message] = list()
@@ -157,7 +160,7 @@ class Djinn(discord.Client):
             if message.channel in self.channels_with_polls:
                 await message.channel.send('Stop spamming!')
             if request.operation[0] == 'fetch':
-                await self.get_movies(options=request.query())
+                await self.get_movies(channel=message.channel, options=request.query())
             elif request.operation[0] == 'poll':
                 await self.poll(message.channel, options=request.query())
 
