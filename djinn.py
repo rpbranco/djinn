@@ -34,7 +34,8 @@ class Request():
         operation_match = re.search(r'(fetch|poll)( \d)', message)
         if not operation_match:
             return
-        self.operation = (operation_match.group(1), int(operation_match.group(2)))
+        self.operation = (operation_match.group(1),
+                          int(operation_match.group(2)))
         self.rating = Request.parse_parameter('rating', message)
         self.votes = Request.parse_parameter('votes', message)
         self.duration = Request.parse_parameter('duration', message)
@@ -71,28 +72,31 @@ class Djinn(discord.Client):
 
     def format_movie_embed(self, movie: Movie) -> discord.Embed:
         poster_url = movie.poster_url()
-        embed = discord.Embed(
-            title=f'{movie.original_title} ({movie.year})',
-            description=movie.url,
-            color=0xe2b616)
+        embed = discord.Embed(title=f'{movie.original_title} ({movie.year})',
+                              description=movie.url,
+                              color=0xe2b616)
         if poster_url not in (None, 'n/a', 'N/A'):
             embed.set_image(url=poster_url)
 
         embed.add_field(name='Rating', value=f'{movie.rating}/10')
         embed.add_field(name='Votes', value=f'{movie.votes}')
         embed.add_field(name='Duration', value=f'{movie.runtime} minutes')
-        embed.add_field(name='Genres', value=f'{movie.genres.replace(",", ", ")}')
+        embed.add_field(name='Genres',
+                        value=f'{movie.genres.replace(",", ", ")}')
         return embed
 
     def random_movie_embeds(
-        self,
-        amount: int = 3,
-        rating: Tuple[str, int] = ('>', 0),
-        votes: Tuple[str, int] = ('>', 0),
-        duration: Tuple[str, int] = ('>', 0),
+            self,
+            amount: int = 3,
+            rating: Tuple[str, int] = ('>', 0),
+            votes: Tuple[str, int] = ('>', 0),
+            duration: Tuple[str, int] = ('>', 0),
     ) -> List[discord.Embed]:
         movie_embeds: List[discord.Embed] = list()
-        for movie in self.movie_db.random_movies(amount=amount, rating=rating, votes=votes, duration=duration):
+        for movie in self.movie_db.random_movies(amount=amount,
+                                                 rating=rating,
+                                                 votes=votes,
+                                                 duration=duration):
             embed = self.format_movie_embed(movie)
             movie_embeds.append(embed)
         return movie_embeds
@@ -113,7 +117,9 @@ class Djinn(discord.Client):
             votes[reaction_count].append(message)
         return votes
 
-    async def poll(self, channel: discord.abc.Messageable, options: Dict = {}) -> None:
+    async def poll(self,
+                   channel: discord.abc.Messageable,
+                   options: Dict = {}) -> None:
         self.channels_with_polls.add(channel)
         await channel.send('Wait while I search my boundless library')
 
@@ -149,6 +155,7 @@ class Djinn(discord.Client):
                 await message.channel.send('Not implemented yet.')
             elif request.operation[0] == 'poll':
                 await self.poll(message.channel, options=request.query())
+
 
 if __name__ == '__main__':
     DISCORD_TOKEN = load('keys/discord_token')
