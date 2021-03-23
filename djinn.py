@@ -123,14 +123,8 @@ class Djinn(discord.Client):
         self.channels_with_polls.add(channel)
         await channel.send('Wait while I search my boundless library')
 
-        movie_embeds: List[discord.Embed] = self.random_movie_embeds(**options)
-
-        messages: List[discord.message.Message] = list()
-        for embed in movie_embeds:
-            message = await channel.send(embed=embed)
-            await message.add_reaction(self.vote_emoji)
-            messages.append(message)
-
+        await self.get_movies(options, self.vote_emoji)
+        
         await channel.send('I will wait 10 minutes before counting the votes.')
         await asyncio.sleep(600)
         await channel.send('I will start counting the votes.')
@@ -143,6 +137,17 @@ class Djinn(discord.Client):
         await result.reply('You shall watch this movie.')
         self.channels_with_polls.remove(channel)
 
+    async def get_movies(self, options: Dict = {}, reaction: str = None):
+        movie_embeds: List[discord.Embed] = self.random_movie_embeds(**options)
+
+        messages: List[discord.message.Message] = list()
+        for embed in movie_embeds:
+            message = await channel.send(embed=embed)
+            if reaction is not None:
+                await message.add_reaction(reaction)
+            messages.append(message)
+        
+
     async def on_message(self, message: discord.message.Message) -> None:
         if message.author == self.user or self.user not in message.mentions:
             return
@@ -151,8 +156,8 @@ class Djinn(discord.Client):
         if request.operation:
             if message.channel in self.channels_with_polls:
                 await message.channel.send('Stop spamming!')
-            elif request.operation[0] == 'fetch':
-                await message.channel.send('Not implemented yet.')
+            if request.operation[0] == 'fetch':
+                await self.get_movies(options=request.query())
             elif request.operation[0] == 'poll':
                 await self.poll(message.channel, options=request.query())
 
