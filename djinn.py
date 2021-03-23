@@ -123,7 +123,7 @@ class Djinn(discord.Client):
         self.channels_with_polls.add(channel)
         await channel.send('Wait while I search my boundless library')
 
-        await messages = self.publish_movies(channel=channel, options=options, self.vote_emoji)
+        messages = await self.publish_movies(channel=channel, options=options, self.vote_emoji)
         
         await channel.send('I will wait 10 minutes before counting the votes.')
         await asyncio.sleep(600)
