@@ -83,7 +83,8 @@ class MoviesTable(Table):
         for title in filter(is_movie, self.load_data_from_file()):
             self.cursor.execute(
                 'INSERT INTO movies VALUES (?, ?, ?, ?, ?, ?, ?)',
-                (*title,)
+                (title[0], title[2], title[3], title[4], title[5], title[7],
+                 title[8]))
         self.connection.commit()
 
 
@@ -91,7 +92,7 @@ class RatingsTable(Table):
     def insert(self) -> None:
         for title in self.load_data_from_file():
             self.cursor.execute('INSERT INTO ratings VALUES (?, ?, ?)',
-                                (*title,)
+                                (title[0], title[1], title[2]))
         self.connection.commit()
 
 
