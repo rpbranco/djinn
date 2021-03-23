@@ -136,16 +136,17 @@ class IMDB():
             rating: Tuple[str, int] = ('>', 0),
             votes: Tuple[str, int] = ('>', 0),
             duration: Tuple[str, int] = ('>', 0),
+            genre: str = '',
     ) -> List:
         # NOTE: rating, votes and duration must have a >, < or = on their first position
         for movie_data in self.connection.execute(
                 f'''
                                                   SELECT * FROM movies NATURAL JOIN ratings
-                                                  WHERE rating {rating[0]} ? AND votes {votes[0]} ? AND runtime {duration[0]} ?
+                                                  WHERE rating {rating[0]} ? AND votes {votes[0]} ? AND runtime {duration[0]} ? AND genres LIKE '%'||?||'%'
                                                   ORDER BY RANDOM()
                                                   limit ?
                                                   ''',
-            (rating[1], votes[1], duration[1], amount)):
+            (rating[1], votes[1], duration[1], genre, amount)):
             yield Movie(*movie_data)
 
 

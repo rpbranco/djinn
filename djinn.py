@@ -22,6 +22,7 @@ class Request():
     rating: Tuple[str, int] = None
     votes: Tuple[str, int] = None
     duration: Tuple[str, int] = None
+    genre: str = None
 
     @staticmethod
     def parse_parameter(parameter_name, message) -> Tuple[str, int]:
@@ -36,9 +37,14 @@ class Request():
             return
         self.operation = (operation_match.group(1),
                           int(operation_match.group(2)))
+
         self.rating = Request.parse_parameter('rating', message)
         self.votes = Request.parse_parameter('votes', message)
         self.duration = Request.parse_parameter('duration', message)
+
+        genre_match = re.search(r'\(.*genre *= *(\w+).*\)', message)
+        if genre_match:
+            self.genre = genre_match.group(1)
 
     def query(self) -> Dict:
         arguments = dict()
@@ -86,17 +92,11 @@ class Djinn(discord.Client):
         return embed
 
     def random_movie_embeds(
-            self,
-            amount: int = 3,
-            rating: Tuple[str, int] = ('>', 0),
-            votes: Tuple[str, int] = ('>', 0),
-            duration: Tuple[str, int] = ('>', 0),
+        self,
+        **options: Any,
     ) -> List[discord.Embed]:
         movie_embeds: List[discord.Embed] = list()
-        for movie in self.movie_db.random_movies(amount=amount,
-                                                 rating=rating,
-                                                 votes=votes,
-                                                 duration=duration):
+        for movie in self.movie_db.random_movies(**options):
             embed = self.format_movie_embed(movie)
             movie_embeds.append(embed)
         return movie_embeds
