@@ -67,6 +67,9 @@ class Request():
 
 
 class Djinn(discord.Client):
+
+    vote_emoji = b'\xf0\x9f\x91\x8d'.decode('utf-8')
+    
     def __init__(
         self,
         movie_db: IMDB,
@@ -76,8 +79,6 @@ class Djinn(discord.Client):
     ) -> None:
         super().__init__(loop=loop, **options)
         self.movie_db = movie_db
-        self.vote_emoji = b'\xf0\x9f\x91\x8d'.decode('utf-8')
-        self.star_emoji = b'\xe2\xad\x90'.decode('utf-8')
         self.channels_with_polls = set()
 
     async def on_ready(self) -> None:
@@ -117,7 +118,7 @@ class Djinn(discord.Client):
         for index, message in enumerate(messages):
             message = await channel.fetch_message(message.id)
             valid_reactions = filter(
-                lambda reaction: reaction.emoji == self.vote_emoji,
+                lambda reaction: reaction.emoji == Djinn.vote_emoji,
                 message.reactions)
             reaction_count = tuple(
                 map(lambda reaction: reaction.count, valid_reactions))[0]
@@ -132,7 +133,7 @@ class Djinn(discord.Client):
 
         messages = await self.publish_movies(channel=channel,
                                              options=options,
-                                             reaction=self.vote_emoji)
+                                             reaction=Djinn.vote_emoji)
 
         await channel.send('I will wait 10 minutes before counting the votes.')
         await asyncio.sleep(600)
