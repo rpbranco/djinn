@@ -69,7 +69,7 @@ class Request():
 class Djinn(discord.Client):
 
     vote_emoji = b'\xf0\x9f\x91\x8d'.decode('utf-8')
-    
+
     def __init__(
         self,
         movie_db: IMDB,
@@ -120,10 +120,18 @@ class Djinn(discord.Client):
             valid_reactions = filter(
                 lambda reaction: reaction.emoji == Djinn.vote_emoji,
                 message.reactions)
-            reaction_count = tuple(
-                map(lambda reaction: reaction.count, valid_reactions))[0]
+            reaction_count = next(valid_reactions).count
             votes[reaction_count].append(message)
         return votes
+
+    async def wait_to_count_votes(
+        minutes: int,
+        channel: discord.abc.Messageable,
+    ) -> None:
+        await channel.send(
+            f'I will wait {minutes} minutes before counting the votes.')
+        await asyncio.sleep(minutes * 60)
+        await channel.send('I will start counting the votes.')
 
     async def poll(self,
                    channel: discord.abc.Messageable,
@@ -135,9 +143,7 @@ class Djinn(discord.Client):
                                              options=options,
                                              reaction=Djinn.vote_emoji)
 
-        await channel.send('I will wait 10 minutes before counting the votes.')
-        await asyncio.sleep(600)
-        await channel.send('I will start counting the votes.')
+        await self.wait_to_count_votes(10)
 
         election_results = await self.count_votes(channel, messages)
 
