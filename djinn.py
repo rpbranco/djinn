@@ -16,6 +16,77 @@ def load(path: str) -> str:
     with open(path, 'r') as f:
         return f.read().strip()
 
+class Query():
+
+    @staticmethod
+    def parse_limit(
+        parameter_name: str,
+        raw_query: str,
+        limit_type: Callable = int,
+        default: Tuple[str, int] = ('>', 0),
+    ) -> Tuple[str, Any]:
+        pattern = f'\(.*{parameter_name} *([=<>]) *(\d+(.\d+)?).*\)'
+        match = re.search(pattern, raw_query)
+        if match:
+            return (match.group(1), amount_type(match.group(2)))
+        return default
+
+    @staticmethod
+    def parse_genre(raw_query: str, default: str = '') -> str:
+        match = re.search(r'\(.*genre *= *(\w+).*\)', raw_query)
+        if match:
+            return genre_match.group(1)
+        return default
+
+    @staticmethod
+    def parse_amount(raw_query: str, default: str = 3) -> int:
+        match = re.search(f'(fetch|poll) (\d)', raw_query)
+        if match:
+            return int(match.group(2))
+        return default
+
+    def __init__(self, raw_query: str = ''):
+        self.amount = Query.parse_amount(raw_query)
+        self.rating = Query.parse_limit('rating', raw_query, float)
+        self.votes = Query.parse_limit('votes', raw_query, int)
+        self.duration = Query.parse_limit('duration', raw_query, int)
+        self.genre = Query.parse_genre(raw_query)
+
+    def to_dict(self) -> Dict:
+        return self.__dict__.copy()
+
+
+class Command():
+
+    @staticmethod
+    def parse_command_identifier(message: str) -> str:
+        # TODO: use class identifier to update pattern
+        pattern = f'(fetch|poll) \d'
+        match = re.search(pattern, message)
+        if match:
+            return match.group(1)
+        return match
+
+    @classmethod
+    def build(cls, message: str) -> Optional['Command']:
+        identifier = Command.parse_command_identifier(message)
+        for subclass in cls.__subclasses__():
+            if identifier == subclass.identifier:
+                return subclass(
+                    Query(message),
+                )
+        return None
+
+    def __init__(
+        self,
+        query: Query = Query(),
+    ) -> None:
+        self.query = query
+
+
+class Fetch(Command):
+    identifier: str = 'fetch'
+
 
 class Request():
     operation: Tuple[str, int] = None
