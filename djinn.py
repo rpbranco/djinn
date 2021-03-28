@@ -10,7 +10,8 @@ import requests
 from imdb import (IMDB, Movie)
 from collections import defaultdict
 from abc import (ABC, abstractmethod)
-from typing import (Dict, List, Union, Any, Optional, Tuple, Union, Callable, Generator)
+from typing import (Dict, List, Union, Any, Optional, Tuple, Union, Callable,
+                    Generator)
 
 
 def load(path: str) -> str:
@@ -141,13 +142,15 @@ class Fetch(Command):
 
     async def process(self) -> None:
         if not self.is_valid_amount():
-            return await self.channel.send('Please specify a number from 1 to 10.')
+            return await self.channel.send(
+                'Please specify a number from 1 to 10.')
 
         await self.channel.send('Wait while I search my boundless library.')
         messages = await self.publish_movies()
 
         if not messages:
-            return await self.channel.send('Could not find anything matching your description.')
+            return await self.channel.send(
+                'Could not find anything matching your description.')
 
         if len(messages) != self.query.amount:
             return await self.channel.send('This is all I could find.')
@@ -186,7 +189,8 @@ class Poll(Command):
 
     async def process(self) -> None:
         if not self.is_valid_amount():
-            return await self.channel.send('Please specify a number from 1 to 10.')
+            return await self.channel.send(
+                'Please specify a number from 1 to 10.')
 
         await self.channel.send('Wait while I search my boundless library')
 
@@ -194,6 +198,7 @@ class Poll(Command):
         await self.wait_to_count_votes(10)
         election_results = await self.count_votes(messages)
         await self.broadcast_winner(election_results)
+
 
 class Cancel(Command):
     identifier: str = 'cancel'
@@ -205,6 +210,7 @@ class Cancel(Command):
     async def process(self) -> None:
         self.bot.deregister_command(self.channel)
         await self.channel.send('Command cancelled')
+
 
 class Djinn(discord.Client):
 

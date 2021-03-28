@@ -130,12 +130,12 @@ class IMDB():
             table.cleanup()
 
     def random_movies(
-            self,
-            amount: int = 3,
-            rating: Tuple[str, int] = ('>', 0),
-            votes: Tuple[str, int] = ('>', 0),
-            duration: Tuple[str, int] = ('>', 0),
-            genre: str = '',
+        self,
+        amount: int = 3,
+        rating: Tuple[str, int] = ('>', 0),
+        votes: Tuple[str, int] = ('>', 0),
+        duration: Tuple[str, int] = ('>', 0),
+        genre: str = '',
     ) -> Generator[Movie, None, None]:
         # NOTE: rating, votes and duration must have a >, < or = on their first position
         for movie_data in self.connection.execute(
