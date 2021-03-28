@@ -10,7 +10,7 @@ import requests
 from imdb import (IMDB, Movie)
 from collections import defaultdict
 from abc import (ABC, abstractmethod)
-from typing import (Dict, List, Union, Any, Optional, Tuple, Union, Callable)
+from typing import (Dict, List, Union, Any, Optional, Tuple, Union, Callable, Generator)
 
 
 def load(path: str) -> str:
@@ -41,7 +41,7 @@ class Query():
 
     @staticmethod
     def parse_amount(raw_query: str, default: str = 3) -> int:
-        match = re.search(f'(fetch|poll) (\d)', raw_query)
+        match = re.search(f'(fetch|poll) (\d+)', raw_query)
         if match:
             return int(match.group(2))
         return default
@@ -61,7 +61,7 @@ class Command(ABC):
     @staticmethod
     def parse_command_identifier(message: str) -> str:
         # TODO: use class identifier to update pattern
-        pattern = f'(fetch|poll) \d'
+        pattern = f'(fetch|poll|cancel)'
         match = re.search(pattern, message)
         if match:
             return match.group(1)
@@ -90,8 +90,12 @@ class Command(ABC):
         self.channel = channel
         self.query = query
 
+    @property
+    def can_be_processed(self) -> bool:
+        return not self.bot.is_channel_busy(self.channel)
+
     @abstractmethod
-    async def process(self):
+    async def process(self) -> None:
         pass
 
     @staticmethod
@@ -110,12 +114,12 @@ class Command(ABC):
                         value=f'{movie.genres.replace(",", ", ")}')
         return embed
 
-    def random_movie_embeds(self, ) -> List[discord.Embed]:
-        movie_embeds: List[discord.Embed] = list()
+    def is_valid_amount(self) -> bool:
+        return 0 < self.query.amount <= 10
+
+    def random_movie_embeds(self, ) -> Generator[discord.Embed, None, None]:
         for movie in self.bot.movie_db.random_movies(**self.query.to_dict()):
-            embed = Command.format_movie_embed(movie)
-            movie_embeds.append(embed)
-        return movie_embeds
+            yield Command.format_movie_embed(movie)
 
     async def publish_movies(
         self,
@@ -135,13 +139,18 @@ class Command(ABC):
 class Fetch(Command):
     identifier: str = 'fetch'
 
-    async def process(self, bot, channel):
-        if not self.bot.register_channel(self.channel):
-            return await self.channel.send('Stop spamming.')
+    async def process(self) -> None:
+        if not self.is_valid_amount():
+            return await self.channel.send('Please specify a number from 1 to 10.')
 
-        await self.publish_movies()
+        await self.channel.send('Wait while I search my boundless library.')
+        messages = await self.publish_movies()
 
-        self.bot.delist_channel(self.channel)
+        if not messages:
+            return await self.channel.send('Could not find anything matching your description.')
+
+        if len(messages) != self.query.amount:
+            return await self.channel.send('This is all I could find.')
 
 
 class Poll(Command):
@@ -175,19 +184,27 @@ class Poll(Command):
         await asyncio.sleep(minutes * 60)
         await self.channel.send('I will start counting the votes.')
 
-    async def process(self, bot, channel):
-        if not self.bot.register_channel(self.channel):
-            return await self.channel.send('Stop spamming.')
+    async def process(self) -> None:
+        if not self.is_valid_amount():
+            return await self.channel.send('Please specify a number from 1 to 10.')
 
         await self.channel.send('Wait while I search my boundless library')
 
-        messages = await self.publish_movies(reaction=bot.vote_emoji)
+        messages = await self.publish_movies(reaction=self.bot.vote_emoji)
         await self.wait_to_count_votes(10)
         election_results = await self.count_votes(messages)
         await self.broadcast_winner(election_results)
 
-        self.bot.delist_channel(self.channel)
+class Cancel(Command):
+    identifier: str = 'cancel'
 
+    @property
+    def can_be_processed(self) -> bool:
+        return self.bot.is_channel_busy(self.channel)
+
+    async def process(self) -> None:
+        self.bot.deregister_command(self.channel)
+        await self.channel.send('Command cancelled')
 
 class Djinn(discord.Client):
 
@@ -202,22 +219,29 @@ class Djinn(discord.Client):
     ) -> None:
         super().__init__(loop=loop, **options)
         self.movie_db = movie_db
-        self.busy_channels = set()
+        self.running_commands: Dict[discord.abc.Messageable, Command] = dict()
+
+    def is_channel_busy(self, channel: discord.abc.Messageable) -> bool:
+        task = self.running_commands.get(channel)
+        return task and not task.done()
+
+    def register_command(
+        self,
+        channel: discord.abc.Messageable,
+        task: asyncio.Task,
+    ) -> None:
+        if not self.is_channel_busy(channel):
+            self.running_commands[channel] = task
+
+    def deregister_command(
+        self,
+        channel: discord.abc.Messageable,
+    ) -> None:
+        if self.is_channel_busy(channel):
+            self.running_commands.get(channel).cancel()
 
     async def on_ready(self) -> None:
         print(f'{self.user} is ready to start working!')
-
-    def register_channel(self, channel: discord.abc.Messageable) -> bool:
-        if channel not in self.busy_channels:
-            self.busy_channels.add(channel)
-            return True
-        return False
-
-    def delist_channel(self, channel: discord.abc.Messageable) -> bool:
-        if channel in self.busy_channels:
-            self.busy_channels.remove(channel)
-            return True
-        return False
 
     async def on_message(self, message: discord.message.Message) -> None:
         if message.author == self.user or self.user not in message.mentions:
@@ -228,8 +252,20 @@ class Djinn(discord.Client):
             channel=message.channel,
             message=message.content.lower(),
         )
-        if command:
-            await command.process(bot=self, channel=message.channel)
+        if not command:
+            return
+
+        if not command.can_be_processed:
+            await message.reply('This command cannot be run.')
+            return
+
+        command_task = asyncio.create_task(command.process())
+        self.register_command(message.channel, command_task)
+        try:
+            await command_task
+        except asyncio.CancelledError:
+            pass
+        self.deregister_command(message.channel)
 
 
 if __name__ == '__main__':

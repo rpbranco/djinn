@@ -6,9 +6,9 @@ import gzip
 import sqlite3
 import requests
 
-from abc import (ABC, abstractmethod)
-from typing import (List, Optional, Tuple)
 from dataclasses import dataclass
+from abc import (ABC, abstractmethod)
+from typing import (List, Optional, Tuple, Generator)
 
 
 @dataclass
@@ -136,7 +136,7 @@ class IMDB():
             votes: Tuple[str, int] = ('>', 0),
             duration: Tuple[str, int] = ('>', 0),
             genre: str = '',
-    ) -> List:
+    ) -> Generator[Movie, None, None]:
         # NOTE: rating, votes and duration must have a >, < or = on their first position
         for movie_data in self.connection.execute(
                 f'''
