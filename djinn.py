@@ -52,6 +52,7 @@ class Query():
         self.rating = Query.parse_limit('rating', raw_query, float)
         self.votes = Query.parse_limit('votes', raw_query, int)
         self.duration = Query.parse_limit('duration', raw_query, int)
+        self.year = Query.parse_limit('year', raw_query, int)
         self.genre = Query.parse_genre(raw_query)
 
     def to_dict(self) -> Dict:
