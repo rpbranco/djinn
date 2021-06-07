@@ -63,7 +63,7 @@ class Command(ABC):
     @staticmethod
     def parse_command_identifier(message: str) -> str:
         # TODO: use class identifier to update pattern
-        pattern = f'(fetch|poll|cancel)'
+        pattern = f'(fetch|poll|cancel|count)'
         match = re.search(pattern, message)
         if match:
             return match.group(1)
@@ -155,6 +155,14 @@ class Fetch(Command):
 
         if len(messages) != self.query.amount:
             return await self.channel.send('This is all I could find.')
+
+class Count(Command):
+    identifier: str = 'count'
+
+    async def process(self) -> None:
+        await self.channel.send('Wait while I search my boundless library.')
+        movie_count = self.bot.movie_db.count_movies(**self.query.to_dict())
+        await self.channel.send(f'There are {movie_count} movies matching your search.')
 
 
 class Poll(Command):

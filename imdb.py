@@ -29,7 +29,7 @@ class Movie():
 
     def poster_url(self) -> Optional[str]:
         response = requests.get(self.url)
-        poster_url_pattern = r'^\s*"image":\s*"(https:\/\/.+\.jpg)",$'
+        poster_url_pattern = r'\s*"image":\s*"(https:\/\/.+\.jpg)",'
         html_content = response.content.decode('utf-8')
         match = re.search(poster_url_pattern, html_content, flags=re.MULTILINE)
         return match.group(1) if match else match
@@ -148,8 +148,28 @@ class IMDB():
                 ''', (rating[1], votes[1], duration[1], year[1], genre, amount)):
             yield Movie(*movie_data)
 
+    def count_movies(
+        self,
+        amount: int = 3,
+        rating: Tuple[str, int] = ('>', 0),
+        votes: Tuple[str, int] = ('>', 0),
+        duration: Tuple[str, int] = ('>', 0),
+        year: Tuple[str, int] = ('>', 0),
+        genre: str = '',
+    ) -> Generator[Movie, None, None]:
+        # NOTE: rating, votes and duration must have a >, < or = on their first position
+        self.cursor.execute(
+                f'''
+                SELECT COUNT() FROM movies NATURAL JOIN ratings
+                WHERE rating {rating[0]} ? AND votes {votes[0]} ? AND runtime {duration[0]} ? AND year {year[0]} ? AND genres LIKE '%'||?||'%'
+                ORDER BY RANDOM()
+                LIMIT ?
+                ''', (rating[1], votes[1], duration[1], year[1], genre, amount))
+        return self.cursor.fetchone()[0]
+
 
 if __name__ == '__main__':
     imdb = IMDB()
     # imdb.update()
-    imdb.random_movies()
+    # imdb.random_movies()
+    # print(imdb.count_movies(rating=('>', 10)))
