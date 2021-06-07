@@ -29,7 +29,7 @@ class Movie():
 
     def poster_url(self) -> Optional[str]:
         response = requests.get(self.url)
-        poster_url_pattern = r'\s*"image":\s*"(https:\/\/.+\.jpg)",'
+        poster_url_pattern = r'\s*"image":\s*"(https:\/\/.+?\.jpg)",'
         html_content = response.content.decode('utf-8')
         match = re.search(poster_url_pattern, html_content, flags=re.MULTILINE)
         return match.group(1) if match else match
