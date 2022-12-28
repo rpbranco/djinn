@@ -7,6 +7,7 @@ import asyncio
 import discord
 import requests
 
+from discord import Intents
 from imdb import (IMDB, Movie)
 from collections import defaultdict
 from abc import (ABC, abstractmethod)
@@ -232,7 +233,9 @@ class Djinn(discord.Client):
         loop: Optional[asyncio.AbstractEventLoop] = None,
         **options: Any,
     ) -> None:
-        super().__init__(loop=loop, **options)
+        intents = Intents.default()
+        intents.message_content = True
+        super().__init__(loop=loop, intents=intents, **options)
         self.movie_db = movie_db
         self.running_commands: Dict[discord.abc.Messageable, Command] = dict()
 
