@@ -21,6 +21,31 @@ They may appear in any order and the spacing is irrelevant.
 | votes | `votes > 1000` |
 | duration | `duration > 0` |
 
+### Grammar
+
+```ebnf
+<statement> ::= <condition> | <statement> " and " <condition> | <statement> " or " <condition> ;
+
+<condition> ::=
+  <search_parameter> " " <search_comparator> " " <number>
+  | "genres = " <movie_genres>
+;
+
+<search_parameter> ::= "rating" | "votes" | "runtime" | "year" ;
+<search_comparator> ::= "<=" | "<" | ">=" | ">" | "=" | "<>" ;
+
+<movie_genres> ::=
+  "Action" | "Adult" | "Adventure" | "Animation" | "Biography" | "Comedy" |
+  "Crime" | "Documentary" | "Drama" | "Family" | "Fantasy" | "Film-Noir" |
+  "Game-Show" | "History" | "Horror" | "Music" | "Musical" | "Mystery" |
+  "News" | "Reality-TV" | "Romance" | "Sci-Fi" | "Short" | "Sport" |
+  "Talk-Show" | "Thriller" | "War" | "Western"
+;
+
+<positive_digit> ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+<number> ::= <positive_digit> { <positive_digit> | "0"  } | "0"
+```
+
 ### Examples
 
 Obtain 3 random movies with a rating better than 3.
