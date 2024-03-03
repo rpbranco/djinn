@@ -1,0 +1,21 @@
+<statement> ::= <condition> | <statement> " and " <condition> | <statement> " or " <condition> ;
+
+<condition> ::= 
+  <search_parameter> " " <search_comparator> " " <number>
+  | "genres = " <movie_genres>
+;
+
+<search_parameter> ::= "rating" | "votes" | "runtime" | "year" | "genres" ;
+<search_comparator> ::= "<=" | "<" | ">=" | ">" | "=" | "<>" ;
+
+<movie_genres> ::= 
+  "Action" | "Adult" | "Adventure" | "Animation" | "Biography" | "Comedy" | 
+  "Crime" | "Documentary" | "Drama" | "Family" | "Fantasy" | "Film-Noir" | 
+  "Game-Show" | "History" | "Horror" | "Music" | "Musical" | "Mystery" | 
+  "News" | "Reality-TV" | "Romance" | "Sci-Fi" | "Short" | "Sport" |
+  "Talk-Show" | "Thriller" | "War" | "Western"
+;
+
+<positive_digit> ::= "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+<positive_number> ::= <positive_digit> "0" | <positive_digit> | <positive_number> <positive_number> ;
+<number> ::= <positive_number> | "0" ;
