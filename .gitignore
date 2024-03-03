@@ -1,3 +1,5 @@
 keys
 *.gz
 __pycache__
+djinn-venv/
+*.db
