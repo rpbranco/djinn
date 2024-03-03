@@ -24,7 +24,11 @@ They may appear in any order and the spacing is irrelevant.
 ### Grammar
 
 ```ebnf
-<statement> ::= <condition> | <statement> " and " <condition> | <statement> " or " <condition> ;
+<statement> ::=
+  <condition>
+  | <statement> " and " <condition>
+  | <statement> " or " <condition>
+;
 
 <condition> ::=
   <search_parameter> " " <search_comparator> " " <number>
