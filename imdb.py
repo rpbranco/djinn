@@ -3,13 +3,16 @@
 import os
 import re
 import gzip
+import logging
 import sqlite3
 import requests
 
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple, Generator
+from typing import List, Optional, Tuple, Generator, List, Any
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 @dataclass
 class Movie:
@@ -54,7 +57,7 @@ class Table(ABC):
                     file.write(chunk)
         return True
 
-    def load_data_from_file(self) -> None:
+    def load_data_from_file(self) -> Generator[List[str], Any, Any]:
         with gzip.open(f"{self.name}.tsv.gz", "r") as file:
             skip = True
             for line in file:
@@ -173,6 +176,113 @@ class IMDB:
             (rating[1], votes[1], duration[1], year[1], genre, amount),
         )
         return self.cursor.fetchone()[0]
+
+    def count_movies_2(
+        self,
+        constraints: Optional[List[List[Tuple[str, str, str]]]],
+    ) -> Optional[int]:
+        if constraints is None:
+            self.cursor.execute(
+                f"""
+                SELECT COUNT() FROM movies NATURAL JOIN ratings
+                """,
+            )
+            return self.cursor.fetchone()[0]
+
+        where_clause = format_constraints(constraints)
+        if where_clause is None:
+            return None
+
+        clause, values = where_clause
+        logger.info(f"{clause}, {values}")
+
+        self.cursor.execute(
+            f"""
+            SELECT COUNT() FROM movies NATURAL JOIN ratings
+            WHERE {clause}
+            """,
+            values,
+        )
+        return self.cursor.fetchone()[0]
+
+
+    def random_movies_2(
+        self,
+        amount: str,
+        constraints: Optional[List[List[Tuple[str, str, str]]]] = None,
+    ) -> Generator[Movie, None, None]:
+
+        amount = amount.strip()
+        if not amount.isdigit():
+            amount = "3"
+
+        query = f"""
+                SELECT * FROM movies NATURAL JOIN ratings
+                ORDER BY RANDOM()
+                LIMIT ?
+                """
+        values = [amount]
+
+        if constraints is not None:
+            where_clause = format_constraints(constraints)
+            if where_clause is None:
+                return None
+
+            clause, clause_values = where_clause
+            logger.info(f"{clause}, {values}")
+
+            query = f"""
+                    SELECT * FROM movies NATURAL JOIN ratings
+                    WHERE {clause}
+                    ORDER BY RANDOM()
+                    LIMIT ?
+                    """
+
+            values = clause_values + values
+            logger.info(values)
+
+        for movie_data in self.connection.execute(query, values):
+            yield Movie(*movie_data)
+
+def format_constraints(
+    constraints: List[List[Tuple[str, str, str]]],
+) -> Optional[Tuple[str, List[str]]]:
+
+    allowed_columns = {
+        "rating",
+        "votes",
+        "runtime",
+        "year",
+        "genres",
+    }
+
+    allowed_operations = {
+        "<=",
+        "<",
+        ">=",
+        ">",
+        "=",
+        "<>",
+    }
+
+    values = []
+    or_clauses = []
+    for constraint in constraints:
+
+        and_clauses = []
+        for column, operation, value in constraint:
+            if column not in allowed_columns or operation not in allowed_operations:
+                return None
+
+            # TODO: this will probably cause a bug with genre, as the comparison
+            # should be fuzzy. Maybe each allowed column should have a list of
+            # available operations??
+            and_clauses.append(f"{column} {operation} ?")
+            values.append(value)
+
+        or_clauses.append(" and ".join(and_clauses))
+
+    return " or ".join(or_clauses), values
 
 
 if __name__ == "__main__":

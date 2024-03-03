@@ -1,294 +1,231 @@
 #!/usr/bin/env python3
 
-import re
-import json
 import random
+import logging
 import asyncio
-import discord
-import requests
 
-from discord import Intents
-from imdb import (IMDB, Movie)
+from imdb import IMDB, Movie
+
+from discord.abc import Messageable
+from discord.message import Message
+from discord import Client, Intents, Embed
+
 from collections import defaultdict
-from abc import (ABC, abstractmethod)
-from typing import (Dict, List, Union, Any, Optional, Tuple, Union, Callable,
-                    Generator)
+from typing import Optional, List, Tuple, Dict
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+class Djinn(Client):
+
+    def init(self):
+        self.movie_db = IMDB()
+        # TODO: decorator to populate dict
+        self.commands = {
+            "fetch": self.fetch,
+            "count": self.count,
+            "poll": self.poll,
+            "cancel": self.cancel,
+        }
+
+        self.calls: Dict[int, asyncio.Task] = {}
+
+    async def on_ready(self) -> None:
+        logger.info(f'{self.user} is ready to start working!')
+
+    async def on_message(self, message: Message) -> None:
+        if message.author == self.user or self.user not in message.mentions:
+            return
+
+        message_content = clean_message(message.content, message.raw_mentions)
+        logger.debug(message.channel.id, message_content)
+
+        # <mention> <command> <arguments>:
+        # @Djinn count where rating > 8 and genre = Comedy or rating > 9
+        # => ((("rating", ">", "9"), ("genre", "=", "commedy")), ("rating", ">", "9"))
+        fn_name, _, arguments = message_content.strip().partition(" ")
+
+        await self.execute(fn_name, message.channel, arguments)
+        # await fn(message.channel, arguments)
+
+    async def on_message_edit(self, _: Message, message_after: Message) -> None:
+        await self.on_message(message_after)
+
+    async def execute(self, fn_name: str, channel: Messageable, arguments: str):
+        fn = self.commands.get(fn_name, None)
+        if fn is None:
+            await channel.send(f'I do not recognize the command "{fn_name}"')
+            return
+
+        if fn_name == "cancel":
+            await fn(channel, arguments)
+            return
+
+        task = self.calls.get(channel.id, None)
+        if task is not None and not task.done():
+            await channel.send(f'Cannot run "{fn_name}", one wish at a time')
+            return
+
+        self.calls[channel.id] = asyncio.create_task(fn(channel, arguments))
+
+    async def display_movies(
+        self,
+        channel: Messageable,
+        amount: str,
+        parsed_constraints: Optional[List[List[Tuple[str, str, str]]]],
+    ) -> List[Message]:
+        messages = []
+        for movie in self.movie_db.random_movies_2(amount, parsed_constraints):
+            movie_embed = to_embed(movie)
+            message = await channel.send(embed=movie_embed)
+            messages.append(message)
+        return messages
+
+    async def cancel(self, channel: Messageable, arguments: str) -> None:
+        task = self.calls.get(channel.id, None)
+        if task is None or task.done():
+            await channel.send(f"I am not doing anything...")
+            return
+
+        task.cancel()
+        await channel.send(f"Stop? Seriously? Just when the party was getting started! Alright, spill your wishes then.")
+
+    async def fetch(self, channel: Messageable, arguments: str):
+        amount, _, constraints = arguments.partition("where")
+        parsed_constraints = parse_search_terms(constraints.strip())
+        await channel.send(f"Here are some movies that even I can't believe are in my collection. Don't blame me if it gets weird!")
+        await self.display_movies(channel, amount, parsed_constraints)
+
+    async def count(self, channel: Messageable, arguments: str):
+        _, _, constraints = arguments.partition("where")
+        parsed_constraints = parse_search_terms(constraints)
+        amount = self.movie_db.count_movies_2(parsed_constraints)
+
+        if amount is None:
+            await channel.send(f"The provided constraints are not properly formatted")
+            return
+
+        await channel.send(f"Found {amount} movies!")
+
+    async def poll(self, channel: Messageable, arguments: str):
+        amount, _, constraints = arguments.partition("where")
+        parsed_constraints = parse_search_terms(constraints.strip())
+
+        await channel.send(f"Here are some movies that even I can't believe are in my collection. Don't blame me if it gets weird!")
+        messages = await self.display_movies(channel, amount, parsed_constraints)
+        vote_emoji = b'\xf0\x9f\x91\x8d'.decode('utf-8')
+        await add_reaction(messages, vote_emoji)
+
+        wait_m = 10
+        await channel.send(f'I will wait {wait_m} minutes before counting the votes.')
+        await asyncio.sleep(wait_m * 60)
+        await channel.send(f'Counting the votes...')
+
+        messages = await update_messages(messages)
+        reaction_count = count_reactions(messages, vote_emoji)
+
+        candidate_messages = reaction_count[max(reaction_count)]
+        winner_message = random.choice(candidate_messages)
+        winner_embeds = winner_message.embeds
+        message_text = "You shall watch this movie."
+        if len(winner_embeds) == 1:
+            winner_title = winner_embeds[0].title
+            message_text = f"You shall watch ***{winner_title}***."
+        await winner_message.reply(message_text)
+
+
+async def update_messages(messages: List[Message]) -> List[Message]:
+    updated_messages = []
+    for message in messages:
+        message = await message.channel.fetch_message(message.id)
+        updated_messages.append(message)
+    return updated_messages
+
+def get_reaction_count(message: Message, emoji: str) -> int:
+    for message_reaction in message.reactions:
+        if message_reaction.emoji == emoji:
+            return message_reaction.count
+    return 0
+
+def count_reactions(messages: List[Message], emoji: str):
+    count = defaultdict(list)
+    for message in messages:
+        reaction_count = get_reaction_count(message, emoji)
+        count[reaction_count].append(message)
+    return count
+
+async def add_reaction(messages: List[Message], reaction: str):
+    for message in messages:
+        await message.add_reaction(reaction)
+
+def to_embed(movie: Movie) -> Embed:
+    poster_url = movie.poster_url()
+    movie_embed = Embed(title=f'{movie.original_title} ({movie.year})',
+                          description=movie.url,
+                          color=0xe2b616)
+    if poster_url not in (None, 'n/a', 'N/A'):
+        movie_embed.set_image(url=poster_url)
+
+    movie_embed.add_field(name='Rating', value=f'{movie.rating}/10')
+    movie_embed.add_field(name='Votes', value=f'{movie.votes}')
+    movie_embed.add_field(name='Duration', value=f'{movie.runtime} minutes')
+    movie_embed.add_field(name='Genres',
+                    value=f'{movie.genres.replace(",", ", ")}')
+    return movie_embed
+
+def clean_message(content: str, raw_mentions: List[int]) -> str:
+    for raw_mention in raw_mentions:
+        content = content.replace(f"<@{raw_mention}>", "").strip()
+    return content
+
+def parse_search_terms(text: str) -> Optional[List[List[Tuple[str, str, str]]]]:
+    # NOTE: parenthesis are not allowed therefore we can rely on the default
+    # operator precedence.
+    search_terms = list()
+    for conditions in text.split("or"):
+
+        local_search_terms = list()
+        for condition in conditions.split("and"):
+            tokens = condition.split()
+            if len(tokens) != 3:
+                return None
+
+            local_search_terms.append(tuple(tokens))
+
+        if len(local_search_terms) == 0:
+            return None
+
+        search_terms.append(local_search_terms)
+
+    return search_terms
 
 
 def load(path: str) -> str:
     with open(path, 'r') as f:
         return f.read().strip()
 
+def setup_logging(level: int):
+    module_names = ("__main__", "imdb")
+    handlers = []
 
-class Query():
-    @staticmethod
-    def parse_limit(
-            parameter_name: str,
-            raw_query: str,
-            limit_type: Callable = int,
-            default: Tuple[str, int] = ('>', 0),
-    ) -> Tuple[str, Any]:
-        pattern = f'\(.*{parameter_name} *([=<>]) *(\d+(.\d+)?).*\)'
-        match = re.search(pattern, raw_query)
-        if match:
-            return (match.group(1), limit_type(match.group(2)))
-        return default
+    formatter = logging.Formatter('[%(asctime)s] %(name)s %(levelname)s: %(message)s')
+    for module_name in module_names:
+        handler = logging.StreamHandler()
+        handler.setFormatter(formatter)
+        handler.addFilter(logging.Filter(module_name))
+        handlers.append(handler)
 
-    @staticmethod
-    def parse_genre(raw_query: str, default: str = '') -> str:
-        match = re.search(r'\(.*genre *= *(\w+).*\)', raw_query)
-        if match:
-            return match.group(1)
-        return default
-
-    @staticmethod
-    def parse_amount(raw_query: str, default: str = 3) -> int:
-        match = re.search(f'(fetch|poll) (\d+)', raw_query)
-        if match:
-            return int(match.group(2))
-        return default
-
-    def __init__(self, raw_query: str = '') -> None:
-        self.amount = Query.parse_amount(raw_query)
-        self.rating = Query.parse_limit('rating', raw_query, float)
-        self.votes = Query.parse_limit('votes', raw_query, int)
-        self.duration = Query.parse_limit('duration', raw_query, int)
-        self.year = Query.parse_limit('year', raw_query, int)
-        self.genre = Query.parse_genre(raw_query)
-
-    def to_dict(self) -> Dict:
-        return self.__dict__.copy()
-
-
-class Command(ABC):
-    @staticmethod
-    def parse_command_identifier(message: str) -> str:
-        # TODO: use class identifier to update pattern
-        pattern = f'(fetch|poll|cancel|count)'
-        match = re.search(pattern, message)
-        if match:
-            return match.group(1)
-        return match
-
-    @classmethod
-    def build(
-        cls,
-        bot: discord.Client,
-        channel: discord.abc.Messageable,
-        message: str,
-    ) -> Optional['Command']:
-        identifier = Command.parse_command_identifier(message)
-        for subclass in cls.__subclasses__():
-            if identifier == subclass.identifier:
-                return subclass(bot, channel, Query(message))
-        return None
-
-    def __init__(
-            self,
-            bot: discord.Client,
-            channel: discord.abc.Messageable,
-            query: Query = Query(),
-    ) -> None:
-        self.bot = bot
-        self.channel = channel
-        self.query = query
-
-    @property
-    def can_be_processed(self) -> bool:
-        return not self.bot.is_channel_busy(self.channel)
-
-    @abstractmethod
-    async def process(self) -> None:
-        pass
-
-    @staticmethod
-    def format_movie_embed(movie: Movie) -> discord.Embed:
-        poster_url = movie.poster_url()
-        embed = discord.Embed(title=f'{movie.original_title} ({movie.year})',
-                              description=movie.url,
-                              color=0xe2b616)
-        if poster_url not in (None, 'n/a', 'N/A'):
-            embed.set_image(url=poster_url)
-
-        embed.add_field(name='Rating', value=f'{movie.rating}/10')
-        embed.add_field(name='Votes', value=f'{movie.votes}')
-        embed.add_field(name='Duration', value=f'{movie.runtime} minutes')
-        embed.add_field(name='Genres',
-                        value=f'{movie.genres.replace(",", ", ")}')
-        return embed
-
-    def is_valid_amount(self) -> bool:
-        return 0 < self.query.amount <= 10
-
-    def random_movie_embeds(self, ) -> Generator[discord.Embed, None, None]:
-        for movie in self.bot.movie_db.random_movies(**self.query.to_dict()):
-            yield Command.format_movie_embed(movie)
-
-    async def publish_movies(
-        self,
-        reaction: str = None,
-    ) -> List[discord.message.Message]:
-        movie_embeds: List[discord.Embed] = self.random_movie_embeds()
-
-        messages: List[discord.message.Message] = list()
-        for embed in movie_embeds:
-            message = await self.channel.send(embed=embed)
-            if reaction:
-                await message.add_reaction(reaction)
-            messages.append(message)
-        return messages
-
-
-class Fetch(Command):
-    identifier: str = 'fetch'
-
-    async def process(self) -> None:
-        if not self.is_valid_amount():
-            return await self.channel.send(
-                'Please specify a number from 1 to 10.')
-
-        await self.channel.send('Wait while I search my boundless library.')
-        messages = await self.publish_movies()
-
-        if not messages:
-            return await self.channel.send(
-                'Could not find anything matching your description.')
-
-        if len(messages) != self.query.amount:
-            return await self.channel.send('This is all I could find.')
-
-class Count(Command):
-    identifier: str = 'count'
-
-    async def process(self) -> None:
-        await self.channel.send('Wait while I search my boundless library.')
-        movie_count = self.bot.movie_db.count_movies(**self.query.to_dict())
-        await self.channel.send(f'There are {movie_count} movies matching your search.')
-
-
-class Poll(Command):
-    identifier: str = 'poll'
-
-    async def count_votes(
-        self,
-        messages: List[discord.message.Message],
-    ) -> Dict[int, List[discord.message.Message]]:
-        votes = defaultdict(list)
-        for index, message in enumerate(messages):
-            message = await self.channel.fetch_message(message.id)
-            valid_reactions = filter(
-                lambda reaction: reaction.emoji == Djinn.vote_emoji,
-                message.reactions)
-            reaction_count = next(valid_reactions).count
-            votes[reaction_count].append(message)
-        return votes
-
-    async def broadcast_winner(
-        self,
-        election_results: Dict[int, List[discord.message.Message]],
-    ) -> None:
-        candidates = election_results[max(election_results)]
-        result = random.choice(candidates)
-        await result.reply('You shall watch this movie.')
-
-    async def wait_to_count_votes(self, minutes: int) -> None:
-        await self.channel.send(
-            f'I will wait {minutes} minutes before counting the votes.')
-        await asyncio.sleep(minutes * 60)
-        await self.channel.send('I will start counting the votes.')
-
-    async def process(self) -> None:
-        if not self.is_valid_amount():
-            return await self.channel.send(
-                'Please specify a number from 1 to 10.')
-
-        await self.channel.send('Wait while I search my boundless library')
-
-        messages = await self.publish_movies(reaction=self.bot.vote_emoji)
-        await self.wait_to_count_votes(10)
-        election_results = await self.count_votes(messages)
-        await self.broadcast_winner(election_results)
-
-
-class Cancel(Command):
-    identifier: str = 'cancel'
-
-    @property
-    def can_be_processed(self) -> bool:
-        return self.bot.is_channel_busy(self.channel)
-
-    async def process(self) -> None:
-        self.bot.deregister_command(self.channel)
-        await self.channel.send('Command cancelled')
-
-
-class Djinn(discord.Client):
-
-    vote_emoji = b'\xf0\x9f\x91\x8d'.decode('utf-8')
-
-    def __init__(
-        self,
-        movie_db: IMDB,
-        *,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
-        **options: Any,
-    ) -> None:
-        intents = Intents.default()
-        intents.message_content = True
-        super().__init__(loop=loop, intents=intents, **options)
-        self.movie_db = movie_db
-        self.running_commands: Dict[discord.abc.Messageable, Command] = dict()
-
-    def is_channel_busy(self, channel: discord.abc.Messageable) -> bool:
-        task = self.running_commands.get(channel)
-        return task and not task.done()
-
-    def register_command(
-        self,
-        channel: discord.abc.Messageable,
-        task: asyncio.Task,
-    ) -> None:
-        if not self.is_channel_busy(channel):
-            self.running_commands[channel] = task
-
-    def deregister_command(
-        self,
-        channel: discord.abc.Messageable,
-    ) -> None:
-        if self.is_channel_busy(channel):
-            self.running_commands.get(channel).cancel()
-
-    async def on_ready(self) -> None:
-        print(f'{self.user} is ready to start working!')
-
-    async def on_message(self, message: discord.message.Message) -> None:
-        if message.author == self.user or self.user not in message.mentions:
-            return
-
-        command = Command.build(
-            bot=self,
-            channel=message.channel,
-            message=message.content.lower(),
-        )
-        if not command:
-            return
-
-        if not command.can_be_processed:
-            await message.reply('This command cannot be run.')
-            return
-
-        command_task = asyncio.create_task(command.process())
-        self.register_command(message.channel, command_task)
-        try:
-            await command_task
-        except asyncio.CancelledError:
-            pass
-        self.deregister_command(message.channel)
-
+    logging.basicConfig(level=level, handlers=handlers)
 
 if __name__ == '__main__':
-    DISCORD_TOKEN = load('keys/discord_token')
-    movie_db = IMDB()
+    setup_logging(logging.INFO)
 
-    djinn = Djinn(movie_db)
-    djinn.run(DISCORD_TOKEN)
+    DISCORD_TOKEN = load('keys/discord_token')
+
+    intents = Intents.default()
+    intents.message_content = True
+
+    djinn = Djinn(intents=intents)
+
+    djinn.init()
+    djinn.run(DISCORD_TOKEN, log_handler=None)
