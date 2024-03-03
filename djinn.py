@@ -182,10 +182,10 @@ def parse_search_terms(text: str) -> Optional[List[List[Tuple[str, str, str]]]]:
     # NOTE: parenthesis are not allowed therefore we can rely on the default
     # operator precedence.
     search_terms = list()
-    for conditions in text.split("or"):
+    for conditions in text.split(" or "):
 
         local_search_terms = list()
-        for condition in conditions.split("and"):
+        for condition in conditions.split(" and "):
             tokens = condition.split()
             if len(tokens) != 3:
                 return None

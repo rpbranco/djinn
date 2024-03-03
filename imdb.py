@@ -274,9 +274,14 @@ def format_constraints(
             if column not in allowed_columns or operation not in allowed_operations:
                 return None
 
-            # TODO: this will probably cause a bug with genre, as the comparison
-            # should be fuzzy. Maybe each allowed column should have a list of
-            # available operations??
+
+            if column == "genres":
+                if operation != "=":
+                    return None
+
+                operation = "like"
+                value = f"%{value}%"
+
             and_clauses.append(f"{column} {operation} ?")
             values.append(value)
 
